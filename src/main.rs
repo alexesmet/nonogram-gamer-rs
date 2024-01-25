@@ -52,9 +52,10 @@ fn parse_level(filepath: &str) -> Result<LevelDescription, GameError> {
     Ok(level_description)
 }
 
-use ggez::{Context, ContextBuilder, GameResult, GameError};
+use ggez::{Context, ContextBuilder, GameResult, GameError, mint};
 use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout};
-use ggez::event::{self, EventHandler};
+use ggez::event::{self, EventHandler, MouseButton};
+use ggez::mint::Point2;
 
 
 struct MyGame {
@@ -62,7 +63,9 @@ struct MyGame {
     max_nums_in_rows: usize,
     max_nums_in_cols: usize,
     background_mesh: graphics::Mesh,
-    cross_mesh: graphics::Mesh
+    cross_mesh: graphics::Mesh,
+    cross_cells: Vec::<graphics::DrawParam>,
+    dark_cells: Vec::<graphics::DrawParam>
 }
 
 pub fn from_cell(shift_in_cells: usize) -> f32 {
@@ -102,7 +105,15 @@ impl MyGame {
         mb.line(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)], 0.05, Color::from_rgb(100, 100, 100));
         mb.line(&[Vec2::new(0.0, 1.0), Vec2::new(1.0, 0.0)], 0.05, Color::from_rgb(100, 100, 100));
         let cross_mesh = graphics::Mesh::from_data(ctx, mb.build());
-        MyGame { max_nums_in_rows, max_nums_in_cols, lvl_desc, background_mesh, cross_mesh }
+        MyGame {
+            max_nums_in_rows,
+            max_nums_in_cols,
+            lvl_desc,
+            background_mesh,
+            cross_mesh,
+            cross_cells: Vec::<graphics::DrawParam>::new(),
+            dark_cells: Vec::<graphics::DrawParam>::new()
+        }
     }
 
     fn board_cell(&self, x: usize, y: usize) -> graphics::Rect {
@@ -118,6 +129,36 @@ impl MyGame {
 impl EventHandler for MyGame {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         // Update code here...
+
+        let pos = _ctx.mouse.position();
+
+        let x_offset = self.max_nums_in_rows as f32 * CELL_SIZE;
+        let y_offset = self.max_nums_in_cols as f32 * CELL_SIZE;
+
+        let in_game_pos = mint::Point2::<f32>::from([pos.x - x_offset, pos.y - y_offset]);
+
+        if in_game_pos.x >= 0.0
+            && in_game_pos.y >= 0.0
+            && in_game_pos.x <= self.lvl_desc.cols.len() as f32 * CELL_SIZE
+            && in_game_pos.y <= self.lvl_desc.rows.len() as f32 * CELL_SIZE {
+            let column_number = in_game_pos.x.div_euclid(CELL_SIZE) as usize;
+            let row_number = in_game_pos.y.div_euclid(CELL_SIZE) as usize;
+
+            if _ctx.mouse.button_just_pressed(MouseButton::Left) {
+                self.dark_cells.push(
+                    graphics::DrawParam::new()
+                        .dest_rect(self.board_cell(column_number, row_number))
+                        .color(Color::BLACK)
+                )
+            }
+            if _ctx.mouse.button_just_pressed(MouseButton::Right) {
+                self.cross_cells.push(
+                    graphics::DrawParam::new()
+                        .dest_rect(self.board_cell(column_number, row_number))
+                )
+            }
+        }
+
         Ok(())
     }
 
@@ -155,20 +196,36 @@ impl EventHandler for MyGame {
             }
         }
 
+        for dark_cell in self.dark_cells.iter() {
+            canvas.draw(
+                &graphics::Quad,
+                *dark_cell
+            );
+        }
         // example: draw dark cell
+        /*
         canvas.draw(
             &graphics::Quad,
             graphics::DrawParam::new()
                 .dest_rect(self.board_cell(1, 1))
                 .color(Color::BLACK)
         );
+        */
 
+        for cross_cell in self.cross_cells.iter() {
+            canvas.draw(
+                &self.cross_mesh,
+                *cross_cell
+            );
+        }
         // example: draw cross cell
+        /*
         canvas.draw(
             &self.cross_mesh,
             graphics::DrawParam::new()
                 .dest_rect(self.board_cell(2, 2))
         );
+         */
 
         canvas.draw(&self.background_mesh, graphics::DrawParam::default());
         canvas.finish(ctx)
