@@ -3,6 +3,7 @@
 mod grid;
 mod description;
 mod clickable_zone;
+mod nonogram_mesh_builder;
 
 use std::path;
 
@@ -47,28 +48,6 @@ fn main() -> GameResult {
 
     // Run!
     event::run(ctx, event_loop, my_game);
-}
-
-
-
-
-
-
-struct NonogramMeshBuilder {
-
-}
-impl NonogramMeshBuilder {
-    fn left_arrow(width: f32, color: Color, ctx: &Context) -> graphics::Mesh {
-        let mb = &mut graphics::MeshBuilder::new();
-        mb.line(&[Vec2::new(0.125, 0.500), Vec2::new(0.500, 0.750)], width, color);
-        mb.line(&[Vec2::new(0.500, 0.625), Vec2::new(0.875, 0.625)], width, color);
-        mb.line(&[Vec2::new(0.875, 0.625), Vec2::new(0.875, 0.375)], width, color);
-        mb.line(&[Vec2::new(0.875, 0.375), Vec2::new(0.500, 0.375)], width, color);
-        mb.line(&[Vec2::new(0.500, 0.375), Vec2::new(0.500, 0.250)], width, color);
-        mb.line(&[Vec2::new(0.500, 0.250), Vec2::new(0.125, 0.500)], width, color);
-        mb.line(&[Vec2::new(0.500, 0.750), Vec2::new(0.500, 0.625)], width, color);
-        graphics::Mesh::from_data(ctx, mb.build())
-    }
 }
 
 struct MyGame {
@@ -151,8 +130,8 @@ impl MyGame {
             ]),
             Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
         );
-        undo_zone.set_mesh_for_draw(NonogramMeshBuilder::left_arrow(width, arrow_default_color, &ctx));
-        undo_zone.set_mesh_for_draw_at_hover(NonogramMeshBuilder::left_arrow(width, arrow_hover_color, &ctx));
+        undo_zone.set_mesh_for_draw(nonogram_mesh_builder::left_arrow(width, arrow_default_color, &ctx));
+        undo_zone.set_mesh_for_draw_at_hover(nonogram_mesh_builder::left_arrow(width, arrow_hover_color, &ctx));
 
         MyGame {
             max_nums_in_rows,
