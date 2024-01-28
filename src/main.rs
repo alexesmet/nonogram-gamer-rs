@@ -2,6 +2,8 @@
 
 mod grid;
 mod description;
+mod clickable_zone;
+mod nonogram_mesh_builder;
 
 use std::path;
 
@@ -10,13 +12,14 @@ use description::LevelDescriptionTemplate;
 use ggez::glam::Vec2;
 use ggez::winit::dpi::{Size, PhysicalSize, LogicalSize};
 use ggez::{Context, ContextBuilder, GameResult, GameError, mint};
-use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout};
+use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout, Rect, Canvas};
 use ggez::event::{self, EventHandler, MouseButton};
-use ggez::mint::Point2;
+use ggez::mint::{Point2, Vector2};
 use serde::{Serialize, Deserialize};
 use crate::grid::GameState;
+use crate::clickable_zone::ClickableZone;
 
-const CELL_SIZE: f32 = 50.0;
+const CELL_SIZE: f32 = 100.0;
 const MAIN_FONT: &'static str = "LiberationMono";
 
 #[derive(Parser)]
@@ -47,19 +50,14 @@ fn main() -> GameResult {
     event::run(ctx, event_loop, my_game);
 }
 
-
-
-
-
-
 struct MyGame {
     max_nums_in_rows: usize,
     max_nums_in_cols: usize,
     background_mesh: graphics::Mesh,
     cross_mesh: graphics::Mesh,
-    cross_cells: Vec::<graphics::DrawParam>,
-    dark_cells: Vec::<graphics::DrawParam>,
     game_state: GameState,
+    game_zone: ClickableZone,
+    undo_zone: ClickableZone
 }
 
 pub fn cell_num_to_coord(shift_in_cells: usize) -> f32 {
@@ -75,7 +73,13 @@ impl MyGame {
             cell_num_to_coord(max_nums_in_rows + lvl_desc.cols.len()) + 2.0,
             cell_num_to_coord(max_nums_in_cols + lvl_desc.rows.len()) + 2.0,
         );
-        ctx.gfx.window().set_inner_size(screen_size);
+
+        let screen_size_with_buttons_line = LogicalSize::new(
+            cell_num_to_coord(max_nums_in_rows + lvl_desc.cols.len()) + 2.0,
+            cell_num_to_coord(max_nums_in_cols + lvl_desc.rows.len() + 1) + 2.0,
+        );
+
+        ctx.gfx.window().set_inner_size(screen_size_with_buttons_line);
         // Load fonts
         ctx.gfx.add_font(MAIN_FONT, graphics::FontData::from_path(ctx, "/LiberationMono-Regular.ttf").unwrap());
         // Prapare background
@@ -104,14 +108,39 @@ impl MyGame {
         mb.line(&[Vec2::new(0.0, 1.0), Vec2::new(1.0, 0.0)], 0.05, Color::from_rgb(100, 100, 100));
         let cross_mesh = graphics::Mesh::from_data(ctx, mb.build());
         let game_state = grid::GameState::new(lvl_desc.into());
+
+        let x_offset = cell_num_to_coord(max_nums_in_rows);
+        let y_offset = cell_num_to_coord(max_nums_in_cols);
+
+        let game_zone = ClickableZone::new(
+            Point2::<f32>::from([x_offset, y_offset]),
+            Vector2::<f32>::from([cell_num_to_coord(game_state.width()), cell_num_to_coord(game_state.height())])
+        );
+
+
+
+        let arrow_default_color = Color::from_rgb(0, 0, 0);
+        let arrow_hover_color = Color::from_rgb(127, 127, 127);
+        let width = 0.02;
+
+        let mut undo_zone = ClickableZone::new(
+            Point2::<f32>::from([
+                0.0,
+                cell_num_to_coord(max_nums_in_cols + game_state.height())
+            ]),
+            Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
+        );
+        undo_zone.set_mesh_for_draw(nonogram_mesh_builder::left_arrow(width, arrow_default_color, &ctx));
+        undo_zone.set_mesh_for_draw_at_hover(nonogram_mesh_builder::left_arrow(width, arrow_hover_color, &ctx));
+
         MyGame {
             max_nums_in_rows,
             max_nums_in_cols,
             background_mesh,
             cross_mesh,
             game_state,
-            cross_cells: Vec::<graphics::DrawParam>::new(),
-            dark_cells: Vec::<graphics::DrawParam>::new()
+            game_zone,
+            undo_zone
         }
         // finally, we got to creating GAME STATE
     }
@@ -126,6 +155,8 @@ impl MyGame {
     }
 }
 
+
+
 impl EventHandler for MyGame {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
         // Update code here...
@@ -137,11 +168,7 @@ impl EventHandler for MyGame {
 
         let in_game_pos = mint::Point2::<f32>::from([pos.x - x_offset, pos.y - y_offset]);
 
-        if in_game_pos.x >= 0.0
-                && in_game_pos.y >= 0.0
-                && in_game_pos.x <= cell_num_to_coord(self.game_state.width())
-                && in_game_pos.y <= cell_num_to_coord(self.game_state.height()) 
-        {
+        if self.game_zone.in_clickable_zone(pos) {
             let col_number = in_game_pos.x.div_euclid(CELL_SIZE) as usize;
             let row_number = in_game_pos.y.div_euclid(CELL_SIZE) as usize;
             
@@ -219,6 +246,8 @@ impl EventHandler for MyGame {
                 },
             }
         }
+
+        self.undo_zone.draw(ctx.mouse.position(), &mut canvas);
 
         canvas.draw(&self.background_mesh, graphics::DrawParam::default());
         canvas.finish(ctx)
