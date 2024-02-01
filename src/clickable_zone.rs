@@ -45,19 +45,13 @@ impl ClickableZone {
     }
     pub fn draw(&self, mouse_position: Point2<f32>, canvas: &mut Canvas) {
         if self.in_clickable_zone(mouse_position) {
-            match &self.mesh_for_draw_at_hover {
-                Some(mesh) => {
-                    self.draw_mesh(canvas, &mesh)
-                },
-                None    => {},
+            if let Some(mesh) = &self.mesh_for_draw_at_hover {
+                self.draw_mesh(canvas, &mesh)
             }
         }
         else {
-            match &self.mesh_for_draw {
-                Some(mesh) => {
-                    self.draw_mesh(canvas, &mesh)
-                },
-                None    => {},
+            if let Some(mesh) = &self.mesh_for_draw {
+                self.draw_mesh(canvas, &mesh)
             }
         }
     }
