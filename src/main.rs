@@ -1,11 +1,12 @@
 #![allow(unused)]
 
-mod grid;
+mod game_state;
 mod description;
 mod clickable_zone;
-mod nonogram_mesh_builder;
-mod nonogram_transaction;
-mod nonogram_target;
+mod grid;
+
+mod meshes;
+mod transaction;
 
 use std::path;
 
@@ -18,7 +19,7 @@ use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout, Rect,
 use ggez::event::{self, EventHandler, MouseButton};
 use ggez::mint::{Point2, Vector2};
 use serde::{Serialize, Deserialize};
-use crate::grid::GameState;
+use crate::game_state::GameState;
 use crate::clickable_zone::ClickableZone;
 
 const CELL_SIZE: f32 = 100.0;
@@ -109,7 +110,7 @@ impl MyGame {
         mb.line(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)], 0.05, Color::from_rgb(100, 100, 100));
         mb.line(&[Vec2::new(0.0, 1.0), Vec2::new(1.0, 0.0)], 0.05, Color::from_rgb(100, 100, 100));
         let cross_mesh = graphics::Mesh::from_data(ctx, mb.build());
-        let game_state = grid::GameState::new(lvl_desc.into());
+        let game_state = game_state::GameState::new(lvl_desc.into());
 
         let x_offset = cell_num_to_coord(max_nums_in_rows);
         let y_offset = cell_num_to_coord(max_nums_in_cols);
@@ -132,8 +133,8 @@ impl MyGame {
             ]),
             Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
         );
-        undo_zone.set_mesh_for_draw(nonogram_mesh_builder::left_arrow(width, arrow_default_color, &ctx));
-        undo_zone.set_mesh_for_draw_at_hover(nonogram_mesh_builder::left_arrow(width, arrow_hover_color, &ctx));
+        undo_zone.set_mesh_for_draw(meshes::left_arrow(width, arrow_default_color, &ctx));
+        undo_zone.set_mesh_for_draw_at_hover(meshes::left_arrow(width, arrow_hover_color, &ctx));
 
         MyGame {
             max_nums_in_rows,
@@ -183,17 +184,17 @@ impl EventHandler for MyGame {
             let row_number = in_game_pos.y.div_euclid(CELL_SIZE) as usize;
             
             if _ctx.mouse.button_just_pressed(MouseButton::Left) {
-                if self.game_state.get(col_number, row_number) == grid::CellState::Filled {
-                    self.game_state.set(col_number, row_number, grid::CellState::Empty)
+                if self.game_state.get(col_number, row_number) == game_state::CellState::Filled {
+                    self.game_state.set(col_number, row_number, game_state::CellState::Empty)
                 } else {
-                    self.game_state.set(col_number, row_number, grid::CellState::Filled)
+                    self.game_state.set(col_number, row_number, game_state::CellState::Filled)
                 }
             }
             if _ctx.mouse.button_just_pressed(MouseButton::Right) {
-                if self.game_state.get(col_number, row_number) == grid::CellState::Crossed {
-                    self.game_state.set(col_number, row_number, grid::CellState::Empty)
+                if self.game_state.get(col_number, row_number) == game_state::CellState::Crossed {
+                    self.game_state.set(col_number, row_number, game_state::CellState::Empty)
                 } else {
-                    self.game_state.set(col_number, row_number, grid::CellState::Crossed)
+                    self.game_state.set(col_number, row_number, game_state::CellState::Crossed)
                 }
             }
         }
@@ -236,7 +237,7 @@ impl EventHandler for MyGame {
         }
 
         for (x,y,cell) in self.game_state.grid_to_iter() {
-            use grid::CellState::*;
+            use game_state::CellState::*;
             match cell {
                 Empty => {},
                 Filled => {
