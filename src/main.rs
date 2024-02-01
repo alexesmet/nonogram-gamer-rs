@@ -4,6 +4,8 @@ mod grid;
 mod description;
 mod clickable_zone;
 mod nonogram_mesh_builder;
+mod nonogram_transaction;
+mod nonogram_target;
 
 use std::path;
 
@@ -163,12 +165,20 @@ impl EventHandler for MyGame {
 
         let pos = _ctx.mouse.position();
 
-        let x_offset = cell_num_to_coord(self.max_nums_in_rows);
-        let y_offset = cell_num_to_coord(self.max_nums_in_cols);
 
-        let in_game_pos = mint::Point2::<f32>::from([pos.x - x_offset, pos.y - y_offset]);
+        if self.undo_zone.in_clickable_zone(pos) {
+            if _ctx.mouse.button_just_pressed(MouseButton::Left) {
+                self.game_state.undo();
+            }
+        }
 
         if self.game_zone.in_clickable_zone(pos) {
+
+            let x_offset = cell_num_to_coord(self.max_nums_in_rows);
+            let y_offset = cell_num_to_coord(self.max_nums_in_cols);
+
+            let in_game_pos = mint::Point2::<f32>::from([pos.x - x_offset, pos.y - y_offset]);
+
             let col_number = in_game_pos.x.div_euclid(CELL_SIZE) as usize;
             let row_number = in_game_pos.y.div_euclid(CELL_SIZE) as usize;
             
@@ -225,7 +235,7 @@ impl EventHandler for MyGame {
             }
         }
 
-        for (x,y,cell) in self.game_state.iter() {
+        for (x,y,cell) in self.game_state.grid_to_iter() {
             use grid::CellState::*;
             match cell {
                 Empty => {},
