@@ -62,9 +62,9 @@ impl GameState {
 
     pub fn undo(&mut self) {
         let transaction_option = self.move_queue.pop();
-        match transaction_option {
-            Some(transaction) => self.grid.rollback_transaction(&transaction),
-            None    => { },
+
+        if let Some(transaction) = transaction_option {
+            self.grid.rollback_transaction(&transaction)
         }
     }
     fn set_no_update(&mut self, col: usize, row: usize, val: CellState) {
