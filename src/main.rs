@@ -8,6 +8,7 @@ mod grid;
 mod meshes;
 mod transaction;
 
+use std::cell::Cell;
 use std::path;
 
 use clap::Parser;
@@ -19,8 +20,9 @@ use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout, Rect,
 use ggez::event::{self, EventHandler, MouseButton};
 use ggez::mint::{Point2, Vector2};
 use serde::{Serialize, Deserialize};
-use crate::game_state::GameState;
+use crate::game_state::{CellState, GameState};
 use crate::clickable_zone::ClickableZone;
+use crate::game_state::CellState::{Crossed, Empty, Filled};
 
 const CELL_SIZE: f32 = 100.0;
 const MAIN_FONT: &'static str = "LiberationMono";
@@ -53,6 +55,14 @@ fn main() -> GameResult {
     event::run(ctx, event_loop, my_game);
 }
 
+struct GameClickState {
+    state: CellState,
+    col: usize,
+    row: usize,
+    is_horizontal: bool,
+    is_vertical: bool
+}
+
 struct MyGame {
     max_nums_in_rows: usize,
     max_nums_in_cols: usize,
@@ -60,7 +70,8 @@ struct MyGame {
     cross_mesh: graphics::Mesh,
     game_state: GameState,
     game_zone: ClickableZone,
-    undo_zone: ClickableZone
+    undo_zone: ClickableZone,
+    click_state: Option<GameClickState>
 }
 
 pub fn cell_num_to_coord(shift_in_cells: usize) -> f32 {
@@ -143,7 +154,8 @@ impl MyGame {
             cross_mesh,
             game_state,
             game_zone,
-            undo_zone
+            undo_zone,
+            click_state: None
         }
         // finally, we got to creating GAME STATE
     }
@@ -180,21 +192,67 @@ impl EventHandler for MyGame {
 
             let in_game_pos = mint::Point2::<f32>::from([pos.x - x_offset, pos.y - y_offset]);
 
-            let col_number = in_game_pos.x.div_euclid(CELL_SIZE) as usize;
-            let row_number = in_game_pos.y.div_euclid(CELL_SIZE) as usize;
-            
-            if _ctx.mouse.button_just_pressed(MouseButton::Left) {
-                if self.game_state.get(col_number, row_number) == game_state::CellState::Filled {
-                    self.game_state.set(col_number, row_number, game_state::CellState::Empty)
-                } else {
-                    self.game_state.set(col_number, row_number, game_state::CellState::Filled)
+            let mut col_number = in_game_pos.x.div_euclid(CELL_SIZE) as usize;
+            let mut row_number = in_game_pos.y.div_euclid(CELL_SIZE) as usize;
+
+            if row_number < self.game_state.height() && col_number < self.game_state.width() {
+                if let None = self.click_state {
+                    let new_state = if _ctx.mouse.button_pressed(MouseButton::Left) {
+                        if self.game_state.get(col_number, row_number) == Filled { Some(Empty) } else { Some(Filled) }
+                    } else if _ctx.mouse.button_pressed(MouseButton::Right) {
+                        if self.game_state.get(col_number, row_number) == Crossed { Some(Empty) } else { Some(Crossed) }
+                    } else {
+                        None
+                    };
+
+                    if let Some(state) = new_state {
+                        self.click_state = Some(GameClickState {
+                            is_horizontal: true,
+                            is_vertical: true,
+                            col: col_number,
+                            row: row_number,
+                            state: state
+                        })
+                    }
+                } else if !_ctx.mouse.button_pressed(MouseButton::Left) && !_ctx.mouse.button_pressed(MouseButton::Right) {
+                    self.click_state = None;
                 }
-            }
-            if _ctx.mouse.button_just_pressed(MouseButton::Right) {
-                if self.game_state.get(col_number, row_number) == game_state::CellState::Crossed {
-                    self.game_state.set(col_number, row_number, game_state::CellState::Empty)
-                } else {
-                    self.game_state.set(col_number, row_number, game_state::CellState::Crossed)
+
+                if let Some(click_state) = &self.click_state {
+                    if click_state.is_horizontal && click_state.is_vertical {
+                        //Diagonal move not allowed
+                        if (click_state.row != row_number && click_state.col != col_number) {
+                            self.click_state = None;
+                        } else if (click_state.row != row_number) {
+                            self.click_state = Some(GameClickState {
+                                is_horizontal: false,
+                                is_vertical: true,
+                                col: click_state.col,
+                                row: click_state.row,
+                                state: click_state.state
+                            });
+                        } else if (click_state.col != col_number) {
+                            self.click_state = Some(GameClickState {
+                                is_horizontal: true,
+                                is_vertical: false,
+                                col: click_state.col,
+                                row: click_state.row,
+                                state: click_state.state
+                            });
+                        }
+                    } else if click_state.is_horizontal {
+                        row_number = click_state.row;
+                    } else if click_state.is_vertical {
+                        col_number = click_state.col;
+                    } else {
+                        panic!("Impossible state");
+                    }
+                }
+
+                if let Some(click_state) = &self.click_state {
+                    if self.game_state.get(col_number, row_number) != click_state.state {
+                        self.game_state.set(col_number, row_number, click_state.state)
+                    }
                 }
             }
         }
