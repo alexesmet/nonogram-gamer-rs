@@ -1,11 +1,11 @@
 use crate::description::LevelDescription;
 use crate::game_state::GameGridState;
 use crate::grid::Grid;
-use crate::play_engine::PlayEngine;
+use crate::strategy::SolvingStrategy;
 use std::time::{Duration, Instant};
 
 pub struct AiPlayer {
-    pub engines: Vec<Box<dyn PlayEngine>>,
+    pub engines: Vec<Box<dyn SolvingStrategy>>,
     current_engine: usize,
     pub is_active: bool,
     last_update_instant: Instant
@@ -13,7 +13,7 @@ pub struct AiPlayer {
 
 impl AiPlayer {
     pub fn new() -> Self {
-        let engines: Vec<Box<dyn PlayEngine>> = Vec::new();
+        let engines: Vec<Box<dyn SolvingStrategy>> = Vec::new();
         Self {
             engines,
             is_active: false,

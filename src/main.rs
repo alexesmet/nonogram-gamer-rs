@@ -7,9 +7,8 @@ mod grid;
 
 mod meshes;
 mod transaction;
-mod play_engine;
+mod strategy;
 mod ai_player;
-mod simple_engine;
 
 use std::cell::Cell;
 use std::path;
@@ -23,12 +22,14 @@ use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout, Rect,
 use ggez::event::{self, EventHandler, MouseButton};
 use ggez::mint::{Point2, Vector2};
 use serde::{Serialize, Deserialize};
+
 use crate::ai_player::AiPlayer;
 use crate::game_state::{CellState, GameState};
 use crate::clickable_zone::ClickableZone;
 use crate::game_state::CellState::{Crossed, Empty, Filled};
-use crate::simple_engine::SimpleEngine;
 use crate::transaction::TransactionBuilder;
+use crate::strategy::simple::SimpleStrategy;
+
 
 const CELL_SIZE: f32 = 100.0;
 const MAIN_FONT: &'static str = "LiberationMono";
@@ -192,7 +193,7 @@ impl MyGame {
         pause_zone.set_mesh_for_draw_at_hover(meshes::pause(width, default_button_hover_color, &ctx));
 
         let mut ai_player = AiPlayer::new();
-        ai_player.engines.push(Box::new( SimpleEngine {}));
+        ai_player.engines.push(Box::new( SimpleStrategy {}));
 
         let done_mesh = meshes::done(0.02, Color::from_rgb(0, 200, 83), &ctx);
         let stopped_mesh = meshes::stopped(0.02, Color::from_rgb(255, 23, 68), &ctx);
@@ -436,7 +437,9 @@ impl EventHandler for MyGame {
             }
         }
 
+        // TODO: tuple destructurisation
         for row_description in self.game_state.lvl_desc().rows.iter().enumerate() {
+            // TODO: tuple destructurisation
             for row_description_part in row_description.1.iter().enumerate() {
                 if row_description_part.1.1 {
                     canvas.draw(
@@ -448,7 +451,9 @@ impl EventHandler for MyGame {
             }
         }
 
+        // TODO: tuple destructurisation
         for col_description in self.game_state.lvl_desc().cols.iter().enumerate() {
+            // TODO: tuple destructurisation
             for col_description_part in col_description.1.iter().enumerate() {
                 if col_description_part.1.1 {
                     canvas.draw(
