@@ -123,24 +123,24 @@ impl GameState {
 
 pub fn update_level_description<T: Grid>(target: &T, lvl_desc: &mut LevelDescription, col: usize, row: usize) {
     if lvl_desc.col_to_line_description(col) == line_to_line_description(&target.col_to_line(col)) {
-        for mut i in lvl_desc.cols[col].iter_mut() {
-            i.1 = true
+        for mut i in lvl_desc.cols[col].parts.iter_mut() {
+            i.is_completed = true
         }
     }
     else {
-        for mut i in lvl_desc.cols[col].iter_mut() {
-            i.1 = false
+        for mut i in lvl_desc.cols[col].parts.iter_mut() {
+            i.is_completed = false
         }
     }
 
     if lvl_desc.row_to_line_description(row) == line_to_line_description(&target.row_to_line(row)) {
-        for mut i in lvl_desc.rows[row].iter_mut() {
-            i.1 = true
+        for mut i in lvl_desc.rows[row].parts.iter_mut() {
+            i.is_completed = true
         }
     }
     else {
-        for mut i in lvl_desc.rows[row].iter_mut() {
-            i.1 = false
+        for mut i in lvl_desc.rows[row].parts.iter_mut() {
+            i.is_completed = false
         }
     }
 }

@@ -9,6 +9,7 @@ mod meshes;
 mod transaction;
 mod strategy;
 mod ai_player;
+mod line;
 
 use std::cell::Cell;
 use std::path;
@@ -386,12 +387,12 @@ impl EventHandler for MyGame {
 
 
         for (i,row) in self.game_state.lvl_desc().rows.iter().enumerate() {
-            for (j,cell) in row.iter().rev().enumerate() {
+            for (j,cell) in row.parts.iter().rev().enumerate() {
                 let dest_point = Vec2::new(
                     ((self.max_nums_in_rows - j - 1) as f32 + 0.5) * CELL_SIZE, 
                     ((self.max_nums_in_cols + i) as f32 + 0.5) * CELL_SIZE
                 );
-                let text = graphics::Text::new(format!("{}", cell.0))
+                let text = graphics::Text::new(format!("{}", cell.elements_count))
                     .set_font(MAIN_FONT)
                     .set_layout(TextLayout::center())
                     .set_scale(CELL_SIZE / 2.0)
@@ -401,12 +402,12 @@ impl EventHandler for MyGame {
         }
 
         for (i,col) in self.game_state.lvl_desc().cols.iter().enumerate() {
-            for (j,cell) in col.iter().rev().enumerate() {
+            for (j,cell) in col.parts.iter().rev().enumerate() {
                 let dest_point = Vec2::new(
                     ((self.max_nums_in_rows + i) as f32 + 0.5) * CELL_SIZE, 
                     ((self.max_nums_in_cols - j - 1) as f32 + 0.5) * CELL_SIZE,
                 );
-                let text = graphics::Text::new(format!("{}", cell.0))
+                let text = graphics::Text::new(format!("{}", cell.elements_count))
                     .set_font(MAIN_FONT)
                     .set_layout(TextLayout::center())
                     .set_scale(CELL_SIZE / 2.0)
@@ -437,29 +438,25 @@ impl EventHandler for MyGame {
             }
         }
 
-        // TODO: tuple destructurisation
-        for row_description in self.game_state.lvl_desc().rows.iter().enumerate() {
-            // TODO: tuple destructurisation
-            for row_description_part in row_description.1.iter().enumerate() {
-                if row_description_part.1.1 {
+        for (row_num, row_description) in self.game_state.lvl_desc().rows.iter().enumerate() {
+            for (row_part_num, row_description_part) in row_description.parts.iter().enumerate() {
+                if row_description_part.is_completed {
                     canvas.draw(
                         &self.transparent_cross_mesh,
                         graphics::DrawParam::new()
-                            .dest_rect(self.row_description_cell(self.max_nums_in_rows - row_description_part.0 - 1, row_description.0))
+                            .dest_rect(self.row_description_cell(self.max_nums_in_rows - row_part_num - 1, row_num))
                     )
                 }
             }
         }
 
-        // TODO: tuple destructurisation
-        for col_description in self.game_state.lvl_desc().cols.iter().enumerate() {
-            // TODO: tuple destructurisation
-            for col_description_part in col_description.1.iter().enumerate() {
-                if col_description_part.1.1 {
+        for (col_num, col_description) in self.game_state.lvl_desc().cols.iter().enumerate() {
+            for (col_part_num, col_description_part) in col_description.parts.iter().enumerate() {
+                if col_description_part.is_completed {
                     canvas.draw(
                         &self.transparent_cross_mesh,
                         graphics::DrawParam::new()
-                            .dest_rect(self.col_description_cell(col_description.0, self.max_nums_in_cols - col_description_part.0 - 1))
+                            .dest_rect(self.col_description_cell(col_num, self.max_nums_in_cols - col_part_num - 1))
                     )
                 }
             }
@@ -470,7 +467,7 @@ impl EventHandler for MyGame {
         self.play_many_zone.draw(ctx.mouse.position(), &mut canvas);
         self.pause_zone.draw(ctx.mouse.position(), &mut canvas);
 
-        let ai_mesh = if (self.ai_player.is_active) {
+        let ai_mesh = if (self.ai_player.is_active()) {
             if self.game_state.lvl_desc().is_done() {
                 &self.done_mesh
             }
