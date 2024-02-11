@@ -21,6 +21,22 @@ impl Transaction {
         self.changes.push(TransactionDetails {col, row, old_state, new_state})
     }
 }
+impl Clone for Transaction {
+    fn clone(&self) -> Self {
+        let mut changes = Vec::<TransactionDetails>::with_capacity(self.changes.len());
+        for td in self.changes.iter() {
+            changes.push(TransactionDetails {
+                new_state: td.new_state,
+                old_state: td.old_state,
+                row: td.row,
+                col: td.col
+            });
+        }
+        Self {
+            changes
+        }
+    }
+}
 pub struct TransactionBuilder {
     grid: Vec<Vec<CellState>>,
     height: usize,

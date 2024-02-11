@@ -38,4 +38,8 @@ impl LevelDescription {
     pub fn col_to_line_description(&self, col_id: usize) -> Vec<usize> {
         self.cols[col_id].iter().map(|(i, _)| *i).collect()
     }
+
+    pub fn is_done(&self) -> bool {
+        self.rows.iter().all(|x| x.iter().all(|y| y.1)) && self.cols.iter().all(|x| x.iter().all(|y| y.1))
+    }
 }
