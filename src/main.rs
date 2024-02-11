@@ -7,6 +7,8 @@ mod grid;
 
 mod meshes;
 mod transaction;
+mod strategy;
+mod ai_player;
 
 use std::cell::Cell;
 use std::path;
@@ -20,9 +22,14 @@ use ggez::graphics::{self, Color, Text, TextFragment, PxScale, TextLayout, Rect,
 use ggez::event::{self, EventHandler, MouseButton};
 use ggez::mint::{Point2, Vector2};
 use serde::{Serialize, Deserialize};
+
+use crate::ai_player::AiPlayer;
 use crate::game_state::{CellState, GameState};
 use crate::clickable_zone::ClickableZone;
 use crate::game_state::CellState::{Crossed, Empty, Filled};
+use crate::transaction::TransactionBuilder;
+use crate::strategy::simple::SimpleStrategy;
+
 
 const CELL_SIZE: f32 = 100.0;
 const MAIN_FONT: &'static str = "LiberationMono";
@@ -68,10 +75,20 @@ struct MyGame {
     max_nums_in_cols: usize,
     background_mesh: graphics::Mesh,
     cross_mesh: graphics::Mesh,
+    transparent_cross_mesh: graphics::Mesh,
     game_state: GameState,
     game_zone: ClickableZone,
     undo_zone: ClickableZone,
-    click_state: Option<GameClickState>
+    click_state: Option<GameClickState>,
+
+    play_once_zone: ClickableZone,
+    play_many_zone: ClickableZone,
+    pause_zone: ClickableZone,
+    ai_player: AiPlayer,
+
+    done_mesh: graphics::Mesh,
+    stopped_mesh: graphics::Mesh,
+    in_progress_mesh: graphics::Mesh
 }
 
 pub fn cell_num_to_coord(shift_in_cells: usize) -> f32 {
@@ -96,7 +113,7 @@ impl MyGame {
         ctx.gfx.window().set_inner_size(screen_size_with_buttons_line);
         // Load fonts
         ctx.gfx.add_font(MAIN_FONT, graphics::FontData::from_path(ctx, "/LiberationMono-Regular.ttf").unwrap());
-        // Prapare background
+        // Prepare background
         let mb = &mut graphics::MeshBuilder::new();
         mb.rectangle(
             graphics::DrawMode::stroke(4.0),
@@ -117,10 +134,8 @@ impl MyGame {
         }
         let background_mesh = graphics::Mesh::from_data(ctx, mb.build());
         // prepare cross texture
-        let mb = &mut graphics::MeshBuilder::new();
-        mb.line(&[Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0)], 0.05, Color::from_rgb(100, 100, 100));
-        mb.line(&[Vec2::new(0.0, 1.0), Vec2::new(1.0, 0.0)], 0.05, Color::from_rgb(100, 100, 100));
-        let cross_mesh = graphics::Mesh::from_data(ctx, mb.build());
+        let cross_mesh = meshes::cross(0.05, Color::from_rgb(100, 100, 100), &ctx);
+        let transparent_cross_mesh = meshes::cross(0.05, Color::from_rgba(100, 100, 100, 100), &ctx);
         let game_state = game_state::GameState::new(lvl_desc.into());
 
         let x_offset = cell_num_to_coord(max_nums_in_rows);
@@ -133,19 +148,56 @@ impl MyGame {
 
 
 
-        let arrow_default_color = Color::from_rgb(0, 0, 0);
-        let arrow_hover_color = Color::from_rgb(127, 127, 127);
+        let default_button_color = Color::from_rgb(0, 0, 0);
+        let default_button_hover_color = Color::from_rgb(127, 127, 127);
         let width = 0.02;
 
         let mut undo_zone = ClickableZone::new(
             Point2::<f32>::from([
-                0.0,
+                cell_num_to_coord(0),
                 cell_num_to_coord(max_nums_in_cols + game_state.height())
             ]),
             Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
         );
-        undo_zone.set_mesh_for_draw(meshes::left_arrow(width, arrow_default_color, &ctx));
-        undo_zone.set_mesh_for_draw_at_hover(meshes::left_arrow(width, arrow_hover_color, &ctx));
+        undo_zone.set_mesh_for_draw(meshes::left_arrow(width, default_button_color, &ctx));
+        undo_zone.set_mesh_for_draw_at_hover(meshes::left_arrow(width, default_button_hover_color, &ctx));
+
+        let mut play_once_zone = ClickableZone::new(
+            Point2::<f32>::from([
+                cell_num_to_coord(2),
+                cell_num_to_coord(max_nums_in_cols + game_state.height())
+            ]),
+            Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
+        );
+        play_once_zone.set_mesh_for_draw(meshes::play_once(width, default_button_color, &ctx));
+        play_once_zone.set_mesh_for_draw_at_hover(meshes::play_once(width, default_button_hover_color, &ctx));
+
+        let mut play_many_zone = ClickableZone::new(
+            Point2::<f32>::from([
+                cell_num_to_coord(3),
+                cell_num_to_coord(max_nums_in_cols + game_state.height())
+            ]),
+            Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
+        );
+        play_many_zone.set_mesh_for_draw(meshes::play_many(width, default_button_color, &ctx));
+        play_many_zone.set_mesh_for_draw_at_hover(meshes::play_many(width, default_button_hover_color, &ctx));
+
+        let mut pause_zone = ClickableZone::new(
+            Point2::<f32>::from([
+                cell_num_to_coord(4),
+                cell_num_to_coord(max_nums_in_cols + game_state.height())
+            ]),
+            Vector2::<f32>::from([CELL_SIZE, CELL_SIZE]),
+        );
+        pause_zone.set_mesh_for_draw(meshes::pause(width, default_button_color, &ctx));
+        pause_zone.set_mesh_for_draw_at_hover(meshes::pause(width, default_button_hover_color, &ctx));
+
+        let mut ai_player = AiPlayer::new();
+        ai_player.engines.push(Box::new( SimpleStrategy {}));
+
+        let done_mesh = meshes::done(0.02, Color::from_rgb(0, 200, 83), &ctx);
+        let stopped_mesh = meshes::stopped(0.02, Color::from_rgb(255, 23, 68), &ctx);
+        let in_progress_mesh = meshes::in_progress(0.02, Color::from_rgb(254, 223, 88), &ctx);
 
         MyGame {
             max_nums_in_rows,
@@ -155,7 +207,15 @@ impl MyGame {
             game_state,
             game_zone,
             undo_zone,
-            click_state: None
+            click_state: None,
+            play_once_zone,
+            play_many_zone,
+            pause_zone,
+            ai_player,
+            transparent_cross_mesh,
+            stopped_mesh,
+            done_mesh,
+            in_progress_mesh
         }
         // finally, we got to creating GAME STATE
     }
@@ -164,6 +224,33 @@ impl MyGame {
         graphics::Rect::new(
             cell_num_to_coord(self.max_nums_in_rows + x),
             cell_num_to_coord(self.max_nums_in_cols + y),
+            CELL_SIZE,
+            CELL_SIZE
+        )
+    }
+
+    fn row_description_cell(&self, x: usize, y: usize) -> graphics::Rect {
+        graphics::Rect::new(
+            cell_num_to_coord(x),
+            cell_num_to_coord(self.max_nums_in_cols + y),
+            CELL_SIZE,
+            CELL_SIZE
+        )
+    }
+
+    fn col_description_cell(&self, x: usize, y: usize) -> graphics::Rect {
+        graphics::Rect::new(
+            cell_num_to_coord(self.max_nums_in_rows + x),
+            cell_num_to_coord(y),
+            CELL_SIZE,
+            CELL_SIZE
+        )
+    }
+
+    fn button_cell(&self, x: usize) -> graphics::Rect {
+        graphics::Rect::new(
+            cell_num_to_coord(x),
+            cell_num_to_coord(self.max_nums_in_cols + self.game_state.height()),
             CELL_SIZE,
             CELL_SIZE
         )
@@ -178,10 +265,43 @@ impl EventHandler for MyGame {
 
         let pos = _ctx.mouse.position();
 
+        {
+            let mut builder = TransactionBuilder::new(self.game_state.grid());
+            self.ai_player.try_perform_turn(self.game_state.lvl_desc(), &mut builder);
+            let transaction = builder.to_transaction(self.game_state.grid());
+            self.game_state.apply_transaction(&transaction);
+        }
 
         if self.undo_zone.in_clickable_zone(pos) {
             if _ctx.mouse.button_just_pressed(MouseButton::Left) {
                 self.game_state.undo();
+                self.ai_player.restart_clock();
+            }
+        }
+
+        if self.play_once_zone.in_clickable_zone(pos) {
+            if _ctx.mouse.button_just_pressed(MouseButton::Left) {
+                let mut builder = TransactionBuilder::new(self.game_state.grid());
+
+                self.ai_player.play_single_turn_emergency(self.game_state.lvl_desc(), &mut builder);
+
+                let transaction = builder.to_transaction(self.game_state.grid());
+
+                self.game_state.apply_transaction(&transaction);
+
+                self.ai_player.restart_clock();
+            }
+        }
+
+        if self.play_many_zone.in_clickable_zone(pos) {
+            if _ctx.mouse.button_just_pressed(MouseButton::Left) {
+                self.ai_player.start_play();
+            }
+        }
+
+        if self.pause_zone.in_clickable_zone(pos) {
+            if _ctx.mouse.button_just_pressed(MouseButton::Left) {
+                self.ai_player.pause_play();
             }
         }
 
@@ -251,7 +371,8 @@ impl EventHandler for MyGame {
 
                 if let Some(click_state) = &self.click_state {
                     if self.game_state.get(col_number, row_number) != click_state.state {
-                        self.game_state.set(col_number, row_number, click_state.state)
+                        self.game_state.set(col_number, row_number, click_state.state);
+                        self.ai_player.restart_clock();
                     }
                 }
             }
@@ -316,7 +437,56 @@ impl EventHandler for MyGame {
             }
         }
 
+        // TODO: tuple destructurisation
+        for row_description in self.game_state.lvl_desc().rows.iter().enumerate() {
+            // TODO: tuple destructurisation
+            for row_description_part in row_description.1.iter().enumerate() {
+                if row_description_part.1.1 {
+                    canvas.draw(
+                        &self.transparent_cross_mesh,
+                        graphics::DrawParam::new()
+                            .dest_rect(self.row_description_cell(self.max_nums_in_rows - row_description_part.0 - 1, row_description.0))
+                    )
+                }
+            }
+        }
+
+        // TODO: tuple destructurisation
+        for col_description in self.game_state.lvl_desc().cols.iter().enumerate() {
+            // TODO: tuple destructurisation
+            for col_description_part in col_description.1.iter().enumerate() {
+                if col_description_part.1.1 {
+                    canvas.draw(
+                        &self.transparent_cross_mesh,
+                        graphics::DrawParam::new()
+                            .dest_rect(self.col_description_cell(col_description.0, self.max_nums_in_cols - col_description_part.0 - 1))
+                    )
+                }
+            }
+        }
+
         self.undo_zone.draw(ctx.mouse.position(), &mut canvas);
+        self.play_once_zone.draw(ctx.mouse.position(), &mut canvas);
+        self.play_many_zone.draw(ctx.mouse.position(), &mut canvas);
+        self.pause_zone.draw(ctx.mouse.position(), &mut canvas);
+
+        let ai_mesh = if (self.ai_player.is_active) {
+            if self.game_state.lvl_desc().is_done() {
+                &self.done_mesh
+            }
+            else {
+                &self.in_progress_mesh
+            }
+        }
+        else {
+            &self.stopped_mesh
+        };
+
+        canvas.draw(
+            ai_mesh,
+            graphics::DrawParam::new()
+                .dest_rect(self.button_cell(6))
+        );
 
         canvas.draw(&self.background_mesh, graphics::DrawParam::default());
         canvas.finish(ctx)

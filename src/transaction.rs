@@ -4,15 +4,19 @@ use std::ops::Range;
 use crate::game_state::{CellState, GameGridState, GameState};
 use crate::grid::Grid;
 
+#[derive(Clone)]
 pub struct TransactionDetails {
     pub col: usize,
     pub row: usize,
     pub old_state: CellState,
     pub new_state: CellState
 }
+
+#[derive(Clone)]
 pub struct Transaction {
     pub changes: Vec<TransactionDetails>
 }
+
 impl Transaction {
     fn new() -> Self {
         Self { changes: Vec::<TransactionDetails>::new()}
