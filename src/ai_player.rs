@@ -56,7 +56,7 @@ impl AiPlayer {
         self.is_active = false
     }
 }
-
+///returns true if strategy make any decision, false if not
 fn process_lines<GridType: Grid>(level_description: &LevelDescription, grid: &mut GridType, strategy: &dyn SolvingStrategy) -> bool {
     for (row_num, row_description) in level_description.rows.iter().enumerate() {
         if row_description.parts.iter().any(|x| !x.is_completed) {
